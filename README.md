@@ -88,4 +88,4 @@ BETTER_AUTH_SECRET="your-better-auth-secret"
 
 ## License
 
-[Specify license here]
+MIT
