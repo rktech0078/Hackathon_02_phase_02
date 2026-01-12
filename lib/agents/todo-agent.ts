@@ -91,12 +91,20 @@ async function executeTool(toolName: string, args: Record<string, unknown>, user
         switch (toolName) {
             case 'add_todo': {
                 const { title, description } = args;
-                const todo = await TodoService.createTodo(userId, title, description);
+                const todo = await TodoService.createTodo(
+                    userId,
+                    typeof title === 'string' ? title : String(title),
+                    typeof description === 'string' ? description : undefined
+                );
                 return `✅ Created task: **${todo.title}** (ID: ${todo.id})`;
             }
 
             case 'list_todos': {
-                const filter = args.filter || 'all';
+                const filterValue = args.filter;
+                const filter = typeof filterValue === 'string' &&
+                               ['all', 'completed', 'pending'].includes(filterValue)
+                               ? filterValue as 'all' | 'completed' | 'pending'
+                               : 'all';
                 const todos = await TodoService.listTodos(userId, filter);
                 if (todos.length === 0) {
                     return "You have no tasks currently.";
@@ -108,9 +116,13 @@ async function executeTool(toolName: string, args: Record<string, unknown>, user
 
             case 'update_todo': {
                 const { id, current_title, new_title, new_description } = args;
-                let targetId = id;
 
-                if (!targetId && current_title) {
+                let targetId: string | undefined;
+                if (typeof id === 'string') {
+                    targetId = id;
+                }
+
+                if (!targetId && typeof current_title === 'string') {
                     const matches = await TodoService.searchTodos(userId, current_title);
                     if (matches.length === 0) return `❌ Could not find any task matching "${current_title}".`;
                     if (matches.length > 1) {
@@ -124,10 +136,15 @@ async function executeTool(toolName: string, args: Record<string, unknown>, user
                     return "⚠️ Please provide either a Task ID or the Current Title to update a task.";
                 }
 
-                const todo = await TodoService.updateTodo(userId, targetId, {
-                    title: new_title,
-                    description: new_description,
-                });
+                const updates: { title?: string; description?: string } = {};
+                if (typeof new_title === 'string') {
+                    updates.title = new_title;
+                }
+                if (typeof new_description === 'string') {
+                    updates.description = new_description;
+                }
+
+                const todo = await TodoService.updateTodo(userId, targetId, updates);
 
                 if (!todo) return "❌ Task not found.";
                 return `✏️ Updated task: **${todo.title}**`;
@@ -135,9 +152,13 @@ async function executeTool(toolName: string, args: Record<string, unknown>, user
 
             case 'complete_todo': {
                 const { id, title } = args;
-                let targetId = id;
 
-                if (!targetId && title) {
+                let targetId: string | undefined;
+                if (typeof id === 'string') {
+                    targetId = id;
+                }
+
+                if (!targetId && typeof title === 'string') {
                     const matches = await TodoService.searchTodos(userId, title);
                     if (matches.length === 0) return `❌ Could not find any task matching "${title}".`;
                     if (matches.length > 1) {
@@ -156,9 +177,13 @@ async function executeTool(toolName: string, args: Record<string, unknown>, user
 
             case 'delete_todo': {
                 const { id, title } = args;
-                let targetId = id;
 
-                if (!targetId && title) {
+                let targetId: string | undefined;
+                if (typeof id === 'string') {
+                    targetId = id;
+                }
+
+                if (!targetId && typeof title === 'string') {
                     const matches = await TodoService.searchTodos(userId, title);
                     if (matches.length === 0) return `❌ Could not find any task matching "${title}".`;
                     if (matches.length > 1) {

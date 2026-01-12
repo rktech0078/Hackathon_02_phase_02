@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
+import { authClient } from '@/lib/auth-client';
 import { useAiAgent } from '@/contexts/AiAgentContext';
 import RoboticIcon from '@/components/RoboticIcon';
 import { ModelSelector } from '@/components/ai-agent/ModelSelector';
@@ -60,43 +60,21 @@ export default function AiAgent() {
 
 
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
 
     useEffect(() => {
         const loadSession = async () => {
             if (!isOpen) return;
-            const { data: { session } } = await supabase.auth.getSession();
+
+            // Using better-auth client to get session
+            const session = await authClient.getSession();
             if (!session) return;
 
-            if (!sessionId) {
-                const { data: sessions } = await supabase
-                    .from('chat_sessions')
-                    .select('id')
-                    .eq('user_id', session.user.id)
-                    .order('updated_at', { ascending: false })
-                    .limit(1);
-
-                if (sessions && sessions.length > 0) {
-                    const latestSessionId = sessions[0].id;
-                    setSessionId(latestSessionId);
-
-                    const { data: msgs } = await supabase
-                        .from('chat_messages')
-                        .select('role, content')
-                        .eq('session_id', latestSessionId)
-                        .order('created_at', { ascending: true });
-
-                    if (msgs) {
-                        setMessages(msgs.map((m, i) => ({ ...m, id: `hist-${i}` } as Message)));
-                    }
-                }
-            }
+            // Note: Since we're not using Supabase anymore, we're not loading previous chat sessions
+            // from the database. This would require implementing a new API endpoint to fetch
+            // user's chat history from the PostgreSQL database using Drizzle ORM.
         };
         loadSession();
-    }, [isOpen, sessionId, supabase]);
+    }, [isOpen]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
