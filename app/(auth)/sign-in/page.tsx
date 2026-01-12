@@ -6,17 +6,17 @@ import Link from 'next/link';
 import { authClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { useNotification } from '@/contexts/NotificationContext';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { showToast } = useNotification();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
     await authClient.signIn.email({
@@ -25,10 +25,11 @@ export default function SignInPage() {
       callbackURL: '/dashboard',
     }, {
       onSuccess: () => {
+        showToast('Welcome back! Redirecting...', 'success');
         router.push('/dashboard');
       },
       onError: (ctx) => {
-        setError(ctx.error.message || 'Sign in failed');
+        showToast(ctx.error.message || 'Sign in failed', 'error');
         setLoading(false);
       },
     });
@@ -58,11 +59,6 @@ export default function SignInPage() {
 
           {/* Form */}
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {error && (
-              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-            )}
 
             <div className="space-y-4">
               <div className="space-y-2">

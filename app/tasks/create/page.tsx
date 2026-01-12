@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
+import { useNotification } from '@/contexts/NotificationContext';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 export default function CreateTask() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useNotification();
   const router = useRouter();
 
   const { data: sessionData, isPending: sessionLoading } = authClient.useSession();
@@ -18,7 +21,7 @@ export default function CreateTask() {
     e.preventDefault();
 
     if (!userId) {
-      setError('User not authenticated');
+      showToast('User not authenticated', 'error');
       return;
     }
 
@@ -35,33 +38,42 @@ export default function CreateTask() {
       });
 
       if (response.ok) {
+        showToast('Task created successfully', 'success');
         router.push('/dashboard');
       } else {
         const errorData = await response.json();
-        setError(errorData.error?.message || 'Failed to create task');
+        showToast(errorData.error?.message || 'Failed to create task', 'error');
       }
     } catch (err) {
-      setError('Error creating task');
+      showToast('Error creating task', 'error');
       console.error(err);
     }
   };
 
-  if (error || isAuthError) return <div>Error: {error || 'User not authenticated'}</div>;
-  if (!userId || sessionLoading) return <div>Loading...</div>;
+  if (isAuthError) return (
+    <div className="container mx-auto p-4 text-center mt-20">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive mb-6">
+        <AlertCircle className="h-8 w-8" />
+      </div>
+      <h1 className="text-xl font-bold">User not authenticated</h1>
+      <Button onClick={() => router.push('/sign-in')} className="mt-4">Sign In</Button>
+    </div>
+  );
+
+  if (!userId || sessionLoading) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+      <Loader2 className="animate-spin h-8 w-8 text-primary" />
+      <p className="text-muted-foreground">Loading...</p>
+    </div>
+  );
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 max-w-2xl mt-10">
       <h1 className="text-2xl font-bold mb-6">Create New Task</h1>
 
-      <form onSubmit={handleSubmit} className="max-w-md">
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {error}
-          </div>
-        )}
-
-        <div className="mb-4">
-          <label htmlFor="title" className="block text-gray-700 font-medium mb-2">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label htmlFor="title" className="text-sm font-medium">
             Title *
           </label>
           <input
@@ -69,38 +81,42 @@ export default function CreateTask() {
             id="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-11 px-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 transition-all"
+            placeholder="What needs to be done?"
             required
           />
         </div>
 
-        <div className="mb-4">
-          <label htmlFor="description" className="block text-gray-700 font-medium mb-2">
+        <div className="space-y-2">
+          <label htmlFor="description" className="text-sm font-medium">
             Description
           </label>
           <textarea
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            rows={4}
+            className="w-full p-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 transition-all min-h-[150px]"
+            placeholder="Add some details..."
           />
         </div>
 
-        <div className="flex space-x-4">
-          <button
+        <div className="flex gap-4 pt-2">
+          <Button
             type="submit"
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            size="lg"
+            className="flex-1 rounded-xl h-12"
           >
             Create Task
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
             onClick={() => router.push('/dashboard')}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            className="flex-1 rounded-xl h-12"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     </div>

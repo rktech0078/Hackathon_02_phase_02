@@ -15,8 +15,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
 import Link from 'next/link';
+import { useNotification } from '@/contexts/NotificationContext';
 
 interface Task {
   id: string;
@@ -36,7 +36,7 @@ export default function EditTask() {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useNotification();
   const [userId, setUserId] = useState<string | null>(null);
   const { data: sessionData, isPending: sessionLoading } = authClient.useSession();
 
@@ -60,10 +60,10 @@ export default function EditTask() {
         setTitle(data.title);
         setDescription(data.description || '');
       } else {
-        setError('Failed to fetch task');
+        showToast('Failed to fetch task', 'error');
       }
     } catch (err) {
-      setError('Error fetching task');
+      showToast('Error fetching task', 'error');
       console.error(err);
     } finally {
       setLoading(false);
@@ -76,7 +76,6 @@ export default function EditTask() {
 
     try {
       setIsSaving(true);
-      setError(null);
       const response = await fetch(`/api/${userId}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -84,13 +83,14 @@ export default function EditTask() {
       });
 
       if (response.ok) {
+        showToast('Task updated successfully', 'success');
         router.push(`/tasks/${task.id}`);
       } else {
         const errorData = await response.json();
-        setError(errorData.error?.message || 'Failed to update task');
+        showToast(errorData.error?.message || 'Failed to update task', 'error');
       }
     } catch (err) {
-      setError('Error updating task');
+      showToast('Error updating task', 'error');
       console.error(err);
     } finally {
       setIsSaving(false);
@@ -101,22 +101,18 @@ export default function EditTask() {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="h-10 w-10 border-4 border-primary/20 border-t-primary rounded-full"
-          />
+          <Loader2 className="h-10 w-10 text-primary animate-spin" />
           <p className="text-muted-foreground animate-pulse font-medium">Preparing edit workspace...</p>
         </div>
       </div>
     );
   }
 
-  if (error || !task) {
+  if (!task) {
     return (
       <div className="container max-w-4xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-bold mb-2 text-destructive">Error Loading Task</h1>
-        <p className="text-muted-foreground mb-8">{error || 'Task context lost.'}</p>
+        <p className="text-muted-foreground mb-8">Task context lost.</p>
         <Button asChild variant="outline">
           <Link href="/dashboard" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
@@ -160,16 +156,6 @@ export default function EditTask() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="p-4 bg-destructive/10 text-destructive text-sm font-medium rounded-2xl border border-destructive/20"
-                >
-                  {error}
-                </motion.div>
-              )}
-
               <div className="space-y-4">
                 {/* Title Input */}
                 <div className="space-y-2 group">

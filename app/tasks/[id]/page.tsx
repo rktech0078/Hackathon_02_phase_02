@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
@@ -13,11 +13,13 @@ import {
   Trash2,
   Pencil,
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useNotification } from '@/contexts/NotificationContext';
 
 interface Task {
   id: string;
@@ -34,10 +36,28 @@ export default function TaskDetail() {
   const router = useRouter();
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { showToast, triggerConfetti } = useNotification();
   const [userId, setUserId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { data: sessionData, isPending: sessionLoading } = authClient.useSession();
+
+  const fetchTask = useCallback(async (currentUserId: string, taskId: string) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/${currentUserId}/tasks/${taskId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTask(data);
+      } else {
+        showToast('Failed to fetch task', 'error');
+      }
+    } catch (err) {
+      showToast('Error fetching task', 'error');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
     if (sessionData?.user) {
@@ -47,25 +67,8 @@ export default function TaskDetail() {
         fetchTask(sessionData.user.id, taskId);
       }
     }
-  }, [sessionData, sessionLoading, id]);
+  }, [sessionData, sessionLoading, id, fetchTask]);
 
-  const fetchTask = async (currentUserId: string, taskId: string) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/${currentUserId}/tasks/${taskId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTask(data);
-      } else {
-        setError('Failed to fetch task');
-      }
-    } catch (err) {
-      setError('Error fetching task');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleToggleTask = async () => {
     if (!userId || !task) return;
@@ -80,9 +83,14 @@ export default function TaskDetail() {
       if (response.ok) {
         const updatedTask = await response.json();
         setTask(updatedTask);
+        if (updatedTask.isCompleted) triggerConfetti();
+        showToast(updatedTask.isCompleted ? 'Task completed!' : 'Task active', 'success');
+      } else {
+        showToast('Failed to update task', 'error');
       }
     } catch (err) {
       console.error('Error updating task:', err);
+      showToast('Error updating task', 'error');
     }
   };
 
@@ -95,10 +103,14 @@ export default function TaskDetail() {
       });
 
       if (response.ok) {
+        showToast('Task deleted successfully', 'success');
         router.push('/dashboard');
+      } else {
+        showToast('Failed to delete task', 'error');
       }
     } catch (err) {
       console.error('Error deleting task:', err);
+      showToast('Error deleting task', 'error');
     }
   };
 
@@ -106,18 +118,14 @@ export default function TaskDetail() {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="h-10 w-10 border-4 border-primary/20 border-t-primary rounded-full"
-          />
+          <Loader2 className="h-10 w-10 text-primary animate-spin" />
           <p className="text-muted-foreground animate-pulse">Fetching task details...</p>
         </div>
       </div>
     );
   }
 
-  if (error || !task) {
+  if (!task) {
     return (
       <div className="container max-w-4xl mx-auto px-4 py-20 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive mb-6">

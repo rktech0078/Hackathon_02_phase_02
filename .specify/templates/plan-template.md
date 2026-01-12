@@ -17,21 +17,24 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: [e.g., OpenAI Agents SDK, MCP SDK, SQLModel, Next.js or NEEDS CLARIFICATION]
+**Storage**: [if applicable, e.g., Neon Serverless PostgreSQL, CoreData, files or N/A]
+**Testing**: [e.g., vitest, Jest, pytest or NEEDS CLARIFICATION]
 **Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Project Type**: [single/web/mobile - determines source structure]
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
 **Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Statelessness Compliance**: Verify that no component will store session state in memory between requests
+**Agent-Centric Architecture**: Confirm that business logic will be handled by AI agents, not hardcoded control flow
+**MCP Tool Integration**: Ensure that all data operations will be exposed as MCP tools
+**Database Persistence**: Verify that all state will be persisted to database, not stored in memory
 
 ## Project Structure
 
@@ -60,19 +63,17 @@ specs/[###-feature]/
 src/
 ├── models/
 ├── services/
-├── cli/
+├── mcp/
+├── agents/
 └── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
 
 # [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
 backend/
 ├── src/
 │   ├── models/
 │   ├── services/
+│   ├── mcp/
+│   ├── agents/
 │   └── api/
 └── tests/
 

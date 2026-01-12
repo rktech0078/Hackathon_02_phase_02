@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { TaskItem } from '@/components/tasks/TaskItem';
 import { Button } from '@/components/ui/button';
-import { Plus, CheckCircle2, Circle, ListTodo, Loader2, AlertCircle, Sparkles } from 'lucide-react';
+import { Plus, CheckCircle2, Circle, ListTodo, Loader2, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useNotification } from '@/contexts/NotificationContext';
 
 interface Task {
   id: string;
@@ -21,12 +22,13 @@ interface Task {
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { showToast, triggerConfetti } = useNotification();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [greeting, setGreeting] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: sessionData, isPending: sessionLoading, error: sessionError } = authClient.useSession();
 
@@ -37,23 +39,7 @@ export default function Dashboard() {
     else setGreeting('Good evening');
   }, []);
 
-  useEffect(() => {
-    if (sessionData?.user) {
-      setUserId(sessionData.user.id);
-      fetchTasks(sessionData.user.id);
-    } else if (!sessionLoading && !sessionData) {
-      setError('User not authenticated');
-    }
-  }, [sessionData, sessionLoading]);
-
-  useEffect(() => {
-    if (sessionError) {
-      setError('Error getting session');
-      console.error(sessionError);
-    }
-  }, [sessionError]);
-
-  const fetchTasks = async (currentUserId: string) => {
+  const fetchTasks = useCallback(async (currentUserId: string) => {
     try {
       setLoading(true);
       const response = await fetch(`/api/${currentUserId}/tasks`);
@@ -61,13 +47,37 @@ export default function Dashboard() {
         const data = await response.json();
         setTasks(data.tasks);
       } else {
-        setError('Failed to fetch tasks');
+        showToast('Failed to fetch tasks', 'error');
       }
     } catch (err) {
-      setError('Error fetching tasks');
+      showToast('Error fetching tasks', 'error');
       console.error(err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (sessionData?.user) {
+      if (sessionData.user.id !== userId) {
+        setUserId(sessionData.user.id);
+        fetchTasks(sessionData.user.id);
+      }
+    }
+  }, [sessionData, sessionLoading, userId, fetchTasks]);
+
+  useEffect(() => {
+    if (sessionError) {
+      showToast('Error getting session', 'error');
+      console.error(sessionError);
+    }
+  }, [sessionError, showToast]);
+
+  const handleManualRefresh = () => {
+    if (userId) {
+      setIsRefreshing(true);
+      fetchTasks(userId);
     }
   };
 
@@ -91,12 +101,13 @@ export default function Dashboard() {
         setTasks([newTask, ...tasks]);
         setNewTaskTitle('');
         setNewTaskDescription('');
+        showToast('Task created successfully', 'success');
       } else {
         const errorData = await response.json();
-        setError(errorData.error?.message || 'Failed to create task');
+        showToast(errorData.error?.message || 'Failed to create task', 'error');
       }
     } catch (err) {
-      setError('Error creating task');
+      showToast('Error creating task', 'error');
       console.error(err);
     } finally {
       setIsCreating(false);
@@ -123,6 +134,10 @@ export default function Dashboard() {
         setTasks(tasks.map(task =>
           task.id === id ? { ...task, isCompleted: !completed } : task
         ));
+        showToast("Failed to update status", "error");
+      } else {
+        if (completed) triggerConfetti();
+        showToast(completed ? "Task completed" : "Task marked incomplete", "success");
       }
     } catch (err) {
       console.error(err);
@@ -130,6 +145,7 @@ export default function Dashboard() {
       setTasks(tasks.map(task =>
         task.id === id ? { ...task, isCompleted: !completed } : task
       ));
+      showToast("Error updating task", "error");
     }
   };
 
@@ -147,10 +163,14 @@ export default function Dashboard() {
 
       if (!response.ok) {
         setTasks(previousTasks);
+        showToast("Failed to delete task", "error");
+      } else {
+        showToast("Task deleted", "success");
       }
     } catch (err) {
       console.error(err);
       setTasks(previousTasks);
+      showToast("Error deleting task", "error");
     }
   };
 
@@ -170,9 +190,13 @@ export default function Dashboard() {
       if (response.ok) {
         const updatedTask = await response.json();
         setTasks(tasks.map(t => t.id === task.id ? updatedTask : t));
+        showToast("Task updated", "success");
+      } else {
+        showToast("Failed to update task", "error");
       }
     } catch (err) {
       console.error(err);
+      showToast("Error updating task", "error");
     }
   };
 
@@ -206,14 +230,14 @@ export default function Dashboard() {
     );
   }
 
-  if (error || sessionError) {
+  if (sessionError) {
     return (
       <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
             <AlertCircle className="h-8 w-8 text-destructive" />
           </div>
-          <p className="text-destructive font-medium">{error || 'An error occurred'}</p>
+          <p className="text-destructive font-medium">Session error occurred</p>
         </div>
       </div>
     );
@@ -278,108 +302,120 @@ export default function Dashboard() {
           </motion.div>
         </motion.div>
 
-        {/* Create Task Form */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.6, ease: "easeOut" }}
-          className="relative group mb-10"
-        >
-          <div className="relative bg-card border border-border/60 rounded-[2rem] p-2 shadow-sm transition-all duration-300 group-focus-within:border-primary group-focus-within:shadow-2xl group-focus-within:shadow-primary/5 group-focus-within:bg-background">
-            <form onSubmit={handleCreateTask} className="flex flex-col md:flex-row items-end gap-2 p-1">
-              <div className="flex-1 w-full grid grid-cols-1 gap-1 px-4 py-3">
-                <div className="flex items-center gap-3 group/title">
-                  <ListTodo className="h-5 w-5 text-muted-foreground/30 group-focus-within/title:text-primary transition-colors shrink-0" />
-                  <input
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="Capture your next big goal..."
-                    className="w-full text-lg font-bold bg-transparent border-none focus:ring-0 placeholder:text-muted-foreground/20 text-foreground transition-all p-0"
-                    required
-                  />
+        {/* Main Content */}
+        <div className="space-y-8">
+          {/* Create Task Form */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6, ease: "easeOut" }}
+            className="relative group mb-10"
+          >
+            <div className="relative bg-card/80 backdrop-blur-sm border border-border/40 rounded-2xl p-4 shadow-sm transition-all duration-300 group-focus-within:border-primary/50 group-focus-within:shadow-lg group-focus-within:shadow-primary/5">
+              <form onSubmit={handleCreateTask} className="flex flex-col md:flex-row items-end gap-3">
+                <div className="flex-1 w-full space-y-2">
+                  <div className="flex items-center gap-3 bg-secondary/30 rounded-xl px-4 py-3 focus-within:bg-secondary/50 transition-colors">
+                    <ListTodo className="h-5 w-5 text-primary/60 shrink-0" />
+                    <input
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      placeholder="What needs to be done?"
+                      className="w-full text-base font-medium bg-transparent border-none focus:ring-0 focus:outline-none placeholder:text-muted-foreground/40 text-foreground"
+                      required
+                    />
+                  </div>
+                  <div className="bg-secondary/20 rounded-xl px-4 py-2 focus-within:bg-secondary/40 transition-colors">
+                    <textarea
+                      value={newTaskDescription}
+                      onChange={(e) => {
+                        setNewTaskDescription(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      placeholder="Add description (optional)"
+                      className="w-full text-sm bg-transparent border-none focus:ring-0 focus:outline-none placeholder:text-muted-foreground/30 text-muted-foreground resize-none min-h-[28px] max-h-[150px] overflow-hidden leading-relaxed"
+                      rows={1}
+                    />
+                  </div>
                 </div>
-                <div className="flex items-start gap-3 pl-8">
-                  <textarea
-                    value={newTaskDescription}
-                    onChange={(e) => {
-                      setNewTaskDescription(e.target.value);
-                      e.target.style.height = 'auto';
-                      e.target.style.height = e.target.scrollHeight + 'px';
-                    }}
-                    placeholder="Any specific details? (optional)"
-                    className="w-full text-sm bg-transparent border-none focus:ring-0 placeholder:text-muted-foreground/30 text-muted-foreground italic resize-none min-h-[24px] max-h-[200px] p-0 overflow-hidden leading-relaxed transition-all"
-                    rows={1}
-                  />
-                </div>
-              </div>
 
-              <div className="w-full md:w-auto p-1">
                 <Button
                   type="submit"
                   disabled={isCreating || !newTaskTitle.trim()}
                   className={cn(
-                    "w-full md:w-[60px] h-[60px] rounded-[1.5rem] shadow-xl transition-all duration-300 transform active:scale-95 flex items-center justify-center",
+                    "w-full md:w-12 h-12 rounded-xl shadow-md transition-all duration-200 transform active:scale-95 flex items-center justify-center shrink-0",
                     newTaskTitle.trim()
-                      ? "bg-primary text-primary-foreground hover:shadow-primary/20 hover:scale-105"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-lg"
                       : "bg-secondary text-muted-foreground cursor-not-allowed"
                   )}
                 >
                   {isCreating ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
-                    <Plus className="h-7 w-7" />
+                    <Plus className="h-5 w-5" />
                   )}
                 </Button>
-              </div>
-            </form>
-          </div>
-        </motion.div>
-
-        {/* Task List */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-foreground">Your Tasks</h2>
-            <div className="text-sm text-muted-foreground bg-secondary/50 px-3 py-1 rounded-full">
-              {tasks.length > 0 ? `${Math.round((completedCount / tasks.length) * 100)}% Done` : '0% Done'}
+              </form>
             </div>
-          </div>
+          </motion.div>
 
-          <AnimatePresence mode="popLayout">
-            {tasks.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="glass-card rounded-xl p-16 text-center border-dashed border-2 bg-transparent"
-              >
-                <div className="mx-auto h-20 w-20 rounded-full bg-secondary/50 flex items-center justify-center mb-4">
-                  <ListTodo className="h-10 w-10 text-muted-foreground/60" />
-                </div>
-                <h3 className="font-semibold text-lg text-foreground mb-2">No tasks yet</h3>
-                <p className="text-muted-foreground max-w-sm mx-auto">
-                  Your list is empty. Add a task above to start your productive day!
-                </p>
-              </motion.div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {tasks.map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onToggle={handleToggleTask}
-                    onDelete={handleDeleteTask}
-                    onEdit={handleEditTask}
-                  />
-                ))}
+          {/* Task List */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-foreground">Your Tasks</h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full hover:bg-secondary"
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={cn("h-4 w-4 text-muted-foreground", isRefreshing && "animate-spin")} />
+                </Button>
               </div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+              <div className="text-sm text-muted-foreground bg-secondary/50 px-3 py-1 rounded-full">
+                {tasks.length > 0 ? `${Math.round((completedCount / tasks.length) * 100)}% Done` : '0% Done'}
+              </div>
+            </div>
+
+            <AnimatePresence mode="popLayout">
+              {tasks.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="glass-card rounded-xl p-16 text-center border-dashed border-2 bg-transparent"
+                >
+                  <div className="mx-auto h-20 w-20 rounded-full bg-secondary/50 flex items-center justify-center mb-4">
+                    <ListTodo className="h-10 w-10 text-muted-foreground/60" />
+                  </div>
+                  <h3 className="font-semibold text-lg text-foreground mb-2">No tasks yet</h3>
+                  <p className="text-muted-foreground max-w-sm mx-auto">
+                    Your list is empty. Add a task above to start your productive day!
+                  </p>
+                </motion.div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {tasks.map(task => (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      onToggle={handleToggleTask}
+                      onDelete={handleDeleteTask}
+                      onEdit={handleEditTask}
+                    />
+                  ))}
+                </div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
       </div>
     </div>
   );

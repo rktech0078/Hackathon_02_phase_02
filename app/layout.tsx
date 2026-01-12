@@ -1,8 +1,10 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
 import { cn } from '@/lib/utils';
+import { AiAgentProvider } from '@/contexts/AiAgentContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
+import { AiAgent } from '@/components/ai-agent/AiAgent';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -26,13 +28,17 @@ export default function RootLayout({
         "min-h-screen bg-background font-sans antialiased",
         inter.className
       )}>
-        <div className="relative flex min-h-screen flex-col">
-          <Navbar />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Footer />
-        </div>
+        <AiAgentProvider>
+          <NotificationProvider>
+            <div className="relative flex min-h-screen flex-col">
+              <Navbar />
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+            <AiAgent />
+          </NotificationProvider>
+        </AiAgentProvider>
       </body>
     </html>
   );
